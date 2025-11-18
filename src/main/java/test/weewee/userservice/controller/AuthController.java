@@ -16,6 +16,7 @@ import test.weewee.userservice.security.JwtUtil;
 import test.weewee.userservice.service.AuthService;
 import test.weewee.userservice.service.UserService;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -71,7 +72,6 @@ public class AuthController {
         User user = userService.findByEmail(request.getEmail())
                 .orElse(null);
 
-        // Правильная проверка пароля с PasswordEncoder
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("Login failed for email: {}", request.getEmail());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -112,8 +112,11 @@ public class AuthController {
         }
 
         String refreshToken = refreshTokenOpt.get();
+        log.debug("Refresh token found, validating...");
+
         if (!jwtUtil.validateToken(refreshToken)) {
             log.warn("Refresh token validation failed");
+            authService.clearRefreshTokenCookie(response); // Очищаем невалидный токен
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -122,6 +125,7 @@ public class AuthController {
 
         if (user == null) {
             log.warn("User not found for ID: {}", userId);
+            authService.clearRefreshTokenCookie(response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -140,7 +144,7 @@ public class AuthController {
 
     @PostMapping("/auth/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request,
-                                            HttpServletResponse response) { // ← ДОБАВЛЯЕМ response
+                                            HttpServletResponse response) {
         log.info("Password reset request for email: {}", request.getEmail());
 
         if (request.getEmail() == null || request.getNewPassword() == null) {
@@ -159,6 +163,23 @@ public class AuthController {
             log.error("Password reset failed for email: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
+    }
+
+    // Добавляем эндпоинт для отладки cookies
+    @PostMapping("/auth/debug-cookies")
+    public ResponseEntity<?> debugCookies(HttpServletRequest request) {
+        log.debug("Debug cookies request");
+
+        if (request.getCookies() == null) {
+            return ResponseEntity.ok("No cookies in request");
+        }
+
+        java.util.Map<String, String> cookies = new java.util.HashMap<>();
+        Arrays.stream(request.getCookies())
+                .forEach(cookie -> cookies.put(cookie.getName(), cookie.getValue()));
+
+        log.debug("Cookies debug result: {}", cookies);
+        return ResponseEntity.ok(cookies);
     }
 
     private UserResponse mapToUserResponse(User user) {

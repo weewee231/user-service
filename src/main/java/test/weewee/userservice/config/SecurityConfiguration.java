@@ -53,7 +53,7 @@ public class SecurityConfiguration {
                 "https://10.4.3.37:3000",
                 "https://10.4.3.37:5173",
                 "https://10.4.3.55:3000",
-                "https://10.4.3.55:3000"
+                "https://10.4.3.84:3000"
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
