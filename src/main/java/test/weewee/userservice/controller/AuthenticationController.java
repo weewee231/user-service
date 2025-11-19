@@ -10,12 +10,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import test.weewee.userservice.dto.*;
 import test.weewee.userservice.exception.AuthException;
+import test.weewee.userservice.exception.UserNotFoundException;
 import test.weewee.userservice.model.User;
 import test.weewee.userservice.security.JwtUtil;
 import test.weewee.userservice.service.AuthenticationService;
 import test.weewee.userservice.service.CookieService;
 
 import java.time.Duration;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -35,6 +37,19 @@ public class AuthenticationController {
             User registeredUser = authenticationService.signup(request);
             log.info("Registration successful for: {}", request.getEmail());
             return ResponseEntity.status(HttpStatus.CREATED).build();
+        } catch (AuthException e) {
+            log.error("Registration failed - auth error: {}", request.getEmail(), e);
+            // ДЛЯ ОШИБОК РЕГИСТРАЦИИ (дубликаты email/phone)
+            if (e.getMessage().contains("email")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка регистрации", Map.of("email", e.getMessage())));
+            } else if (e.getMessage().contains("телефон")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка регистрации", Map.of("phone", e.getMessage())));
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка регистрации", "error", e.getMessage()));
+            }
         } catch (Exception e) {
             log.error("Registration failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -65,13 +80,28 @@ public class AuthenticationController {
 
             LoginResponse loginResponse = LoginResponse.builder()
                     .user(authResponse.getUser())
-                    .accessToken(accessToken)  // используем проверенный токен
+                    .accessToken(accessToken)
                     .build();
 
             log.info("Login successful for: {}", request.getEmail());
             return ResponseEntity.ok()
                     .header(HttpHeaders.SET_COOKIE, refreshTokenCookie)
                     .body(loginResponse);
+        } catch (UserNotFoundException e) {
+            log.error("Login failed - user not found: {}", request.getEmail());
+            // ДЛЯ "ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН" - ПОЛЕ email
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("Ошибка входа", Map.of("email", e.getMessage())));
+        } catch (AuthException e) {
+            log.error("Login failed - auth error: {}", request.getEmail(), e);
+            // ДЛЯ "НЕВЕРНЫЙ ПАРОЛЬ" - ПОЛЕ password
+            if (e.getMessage().contains("парол")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка входа", Map.of("password", e.getMessage())));
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка входа", "error", e.getMessage()));
+            }
         } catch (Exception e) {
             log.error("Login failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -139,6 +169,11 @@ public class AuthenticationController {
             authenticationService.updatePassword(request);
             log.info("Password reset successful for: {}", request.getEmail());
             return ResponseEntity.ok().build();
+        } catch (UserNotFoundException e) {
+            log.error("Password reset failed - user not found: {}", request.getEmail());
+            // ДЛЯ "ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН" - ПОЛЕ email
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("Ошибка сброса пароля", Map.of("email", e.getMessage())));
         } catch (Exception e) {
             log.error("Password reset failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

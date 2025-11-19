@@ -10,9 +10,12 @@ import org.springframework.web.bind.annotation.*;
 import test.weewee.userservice.dto.ErrorResponse;
 import test.weewee.userservice.dto.UpdateUserRequest;
 import test.weewee.userservice.dto.UserResponse;
+import test.weewee.userservice.exception.AuthException;
 import test.weewee.userservice.model.User;
 import test.weewee.userservice.security.JwtUtil;
 import test.weewee.userservice.service.AuthenticationService;
+
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -57,12 +60,25 @@ public class UserController {
         }
 
         try {
-            // ВОЗВРАЩАЕМ ОБНОВЛЕННОГО ПОЛЬЗОВАТЕЛЯ
+
             User updatedUser = authenticationService.updateUser(userEmail, updateRequest);
             UserResponse userResponse = mapToUserResponse(updatedUser);
 
             log.info("User updated successfully: {}", updatedUser.getEmail());
-            return ResponseEntity.ok(userResponse); // ← ВОЗВРАЩАЕМ ОБЪЕКТ
+            return ResponseEntity.ok(userResponse);
+        } catch (AuthException e) {
+            log.error("Update user failed - auth error: {}", userEmail, e);
+            // ДЛЯ ОШИБОК ОБНОВЛЕНИЯ (дубликаты email/phone)
+            if (e.getMessage().contains("email")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка обновления пользователя", Map.of("email", e.getMessage())));
+            } else if (e.getMessage().contains("телефон")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка обновления пользователя", Map.of("phone", e.getMessage())));
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ErrorResponse.of("Ошибка обновления пользователя", "error", e.getMessage()));
+            }
         } catch (Exception e) {
             log.error("Update user failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
