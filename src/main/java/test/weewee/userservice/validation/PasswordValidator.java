@@ -11,11 +11,11 @@ public class PasswordValidator implements ConstraintValidator<ValidPassword, Str
             return false;
         }
 
-        // Проверяем наличие хотя бы одной цифры
+
         boolean hasDigit = password.chars().anyMatch(Character::isDigit);
-        // Проверяем наличие хотя бы одной буквы
+
         boolean hasLetter = password.chars().anyMatch(Character::isLetter);
-        // Проверяем отсутствие пробелов
+
         boolean noSpaces = !password.contains(" ");
 
         return hasDigit && hasLetter && noSpaces;

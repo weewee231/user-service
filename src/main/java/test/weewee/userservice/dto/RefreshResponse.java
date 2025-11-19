@@ -1,9 +1,11 @@
 package test.weewee.userservice.dto;
 
+import lombok.Builder;
 import lombok.Data;
 
 @Data
-public class TokenResponse {
-    private String accessToken;
+@Builder
+public class RefreshResponse {
     private UserResponse user;
+    private String accessToken;
 }

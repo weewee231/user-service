@@ -21,7 +21,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
 
-        // Собираем ВСЕ ошибки из ВСЕХ полей
         ex.getBindingResult().getAllErrors().forEach(error -> {
             if (error instanceof FieldError) {
                 String fieldName = ((FieldError) error).getField();
@@ -36,5 +35,25 @@ public class GlobalExceptionHandler {
 
         log.warn("Validation errors found: {}", errors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<Map<String, String>> handleAuthException(AuthException ex) {
+        log.warn("Auth exception: {}", ex.getMessage());
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleUserNotFoundException(UserNotFoundException ex) {
+        log.warn("User not found: {}", ex.getMessage());
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 }

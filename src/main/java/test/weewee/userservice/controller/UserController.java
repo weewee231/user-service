@@ -3,71 +3,76 @@ package test.weewee.userservice.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import test.weewee.userservice.dto.UpdateUserRequest;
 import test.weewee.userservice.dto.UserResponse;
 import test.weewee.userservice.model.User;
-import test.weewee.userservice.service.AuthService;
-import test.weewee.userservice.service.UserService;
+import test.weewee.userservice.security.JwtUtil;
+import test.weewee.userservice.service.AuthenticationService;
 
-import java.util.UUID;
-
+@Slf4j
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
 public class UserController {
 
-    private static final Logger log = LoggerFactory.getLogger(UserController.class);
-
-    private final UserService userService;
-    private final AuthService authService;
+    private final AuthenticationService authenticationService;
+    private final JwtUtil jwtUtil;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser(HttpServletRequest request) {
-        log.debug("Get current user request");
+        log.debug("GET /users/me - get current user");
 
-        return authService.getUserEmailFromRequest(request)
-                .flatMap(userService::findByEmail)
-                .map(user -> {
-                    log.debug("User found: {}", user.getEmail());
-                    return mapToUserResponse(user);
-                })
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> {
-                    log.warn("Unauthorized access to /users/me");
-                    return ResponseEntity.status(401).build();
-                });
+        String userEmail = extractUserEmailFromRequest(request);
+        if (userEmail == null) {
+            log.warn("Unauthorized access to /users/me");
+            return ResponseEntity.status(401).build();
+        }
+
+        try {
+            User user = authenticationService.getCurrentUser(userEmail);
+            UserResponse userResponse = mapToUserResponse(user);
+            log.debug("User found: {}", user.getEmail());
+            return ResponseEntity.ok(userResponse);
+        } catch (Exception e) {
+            log.warn("User not found: {}", userEmail);
+            return ResponseEntity.status(401).build();
+        }
     }
 
     @PutMapping("/me")
-    public ResponseEntity<?> updateCurrentUser(@Valid @RequestBody UpdateUserRequest request,
-                                               HttpServletRequest httpRequest) {
-        log.debug("Update user request");
+    public ResponseEntity<?> updateCurrentUser(
+            HttpServletRequest request,
+            @Valid @RequestBody UpdateUserRequest updateRequest) {
+        log.debug("PUT /users/me - update current user");
 
-        return authService.getUserEmailFromRequest(httpRequest)
-                .flatMap(userService::findByEmail)
-                .map(user -> {
-                    log.info("Updating user with email: {}", user.getEmail());
+        String userEmail = extractUserEmailFromRequest(request);
+        if (userEmail == null) {
+            log.warn("Unauthorized attempt to update user");
+            return ResponseEntity.status(401).build();
+        }
 
-                    User updatedUser = new User();
-                    updatedUser.setEmail(request.getEmail());
-                    updatedUser.setPassword(request.getPassword());
-                    updatedUser.setFirstName(request.getFirstName());
-                    updatedUser.setLastName(request.getLastName());
-                    updatedUser.setPhone(request.getPhone());
+        try {
+            authenticationService.updateUser(userEmail, updateRequest);
+            log.info("User updated successfully: {}", userEmail);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Update user failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
-                    User result = userService.updateUser(user.getId(), updatedUser);
-                    log.info("User updated successfully: {}", result.getEmail());
-
-                    return ResponseEntity.ok().build();
-                })
-                .orElseGet(() -> {
-                    log.warn("Unauthorized attempt to update user");
-                    return ResponseEntity.status(401).build();
-                });
+    private String extractUserEmailFromRequest(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            if (jwtUtil.validateToken(token)) {
+                return jwtUtil.getEmailFromToken(token);
+            }
+        }
+        return null;
     }
 
     private UserResponse mapToUserResponse(User user) {

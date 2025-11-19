@@ -51,21 +51,33 @@ public class JwtUtil {
     }
 
     public UUID getUserIdFromToken(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-        return UUID.fromString(claims.getSubject());
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            return UUID.fromString(claims.getSubject());
+        } catch (Exception e) {
+            log.error("Failed to extract user ID from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public String getEmailFromToken(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-        return claims.get("email", String.class);
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            String email = claims.get("email", String.class);
+            log.debug("Extracted email from token: {}", email);
+            return email;
+        } catch (Exception e) {
+            log.error("Failed to extract email from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public boolean validateToken(String token) {
@@ -74,6 +86,7 @@ public class JwtUtil {
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token);
+            log.debug("Token validation successful");
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             log.warn("Invalid JWT token: {}", e.getMessage());

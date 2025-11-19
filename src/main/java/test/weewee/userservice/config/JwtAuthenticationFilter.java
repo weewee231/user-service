@@ -35,6 +35,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+
+        // Пропускаем JWT проверку для эндпоинтов аутентификации (кроме logout)
+        String path = request.getServletPath();
+        if (path.startsWith("/auth/") && !path.equals("/auth/logout")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
