@@ -47,16 +47,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             logger.debug("No Bearer token found in request, continuing filter chain");
+
+            // ВОЗВРАЩАЕМ ОШИБКУ ВМЕСТО 403
+            if (path.startsWith("/users/")) {
+                sendErrorResponse(response, "Токен отсутствует. Пожалуйста, авторизуйтесь.");
+                return; // ← ДОБАВИЛ return
+            }
+
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
-            final String jwt = authHeader.substring(7);
-            logger.debug("Processing JWT token for authentication");
+            String jwt = authHeader.substring(7);
+
+            // АГРЕССИВНАЯ ОЧИСТКА ТОКЕНА
+            jwt = cleanToken(jwt);
+            logger.debug("Processing JWT token for authentication (cleaned): {}...",
+                    jwt.substring(0, Math.min(30, jwt.length())));
 
             if (!jwtUtil.validateToken(jwt)) {
                 logger.warn("Invalid JWT token");
+
+                // ВОЗВРАЩАЕМ ОШИБКУ ВМЕСТО 403
+                if (path.startsWith("/users/")) {
+                    sendErrorResponse(response, "Недействительный токен. Пожалуйста, авторизуйтесь заново.");
+                    return; // ← ДОБАВИЛ return
+                }
+
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -83,7 +101,62 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (Exception exception) {
             logger.error("JWT authentication failed: {}", exception.getMessage(), exception);
+
+            // ВОЗВРАЩАЕМ ОШИБКУ ВМЕСТО 403
+            if (path.startsWith("/users/")) {
+                sendErrorResponse(response, "Ошибка аутентификации: " + exception.getMessage());
+                return; // ← ДОБАВИЛ return
+            }
+
             handlerExceptionResolver.resolveException(request, response, null, exception);
         }
+    }
+
+    /**
+     * Отправляет JSON ошибку вместо 403 Forbidden
+     */
+    private void sendErrorResponse(HttpServletResponse response, String errorMessage) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
+        String errorJson = String.format(
+                "{\"message\":\"%s\",\"errors\":{\"auth\":\"%s\"}}",
+                "Ошибка аутентификации",
+                errorMessage
+        );
+        response.getWriter().write(errorJson);
+        response.getWriter().flush();
+    }
+
+    /**
+     * Агрессивная очистка токена от любых лишних символов
+     */
+    private String cleanToken(String token) {
+        if (token == null) {
+            return null;
+        }
+
+        String original = token;
+
+        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
+        String cleaned = token.replaceAll("[\"']", "");
+
+        // 2. Убираем пробелы
+        cleaned = cleaned.trim();
+
+        // 3. Убираем слово "Bearer" если оно есть повторно
+        cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
+
+        // 4. Убираем любые не-JWT символы в начале/конце
+        cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
+
+        logger.debug("=== TOKEN CLEANING DEBUG ===");
+        logger.debug("Original: '{}'", original);
+        logger.debug("Cleaned:  '{}'", cleaned);
+        logger.debug("Length: {} -> {}", original.length(), cleaned.length());
+        logger.debug("Starts with eyJ: {}", cleaned.startsWith("eyJ"));
+
+        return cleaned;
     }
 }

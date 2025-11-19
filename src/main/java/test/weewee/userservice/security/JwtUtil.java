@@ -31,23 +31,40 @@ public class JwtUtil {
 
     public String generateAccessToken(UUID userId, String email) {
         log.debug("Generating access token for user: {}", userId);
-        return Jwts.builder()
+
+        String token = Jwts.builder()
                 .setSubject(userId.toString())
                 .claim("email", email)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
                 .compact();
+
+        // ДЕТАЛЬНЫЙ ЛОГ
+        log.debug("=== ACCESS TOKEN GENERATED ===");
+        log.debug("For user: {} ({})", email, userId);
+        log.debug("Token: {}...", token.substring(0, Math.min(50, token.length())));
+        log.debug("Length: {}", token.length());
+        log.debug("Expires in: {} ms", expiration);
+
+        return token;
     }
 
     public String generateRefreshToken(UUID userId) {
         log.debug("Generating refresh token for user: {}", userId);
-        return Jwts.builder()
+
+        String token = Jwts.builder()
                 .setSubject(userId.toString())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
                 .signWith(getSigningKey())
                 .compact();
+
+        log.debug("Generated refresh token: {}... (length: {})",
+                token.substring(0, Math.min(20, token.length())),
+                token.length());
+
+        return token;
     }
 
     public UUID getUserIdFromToken(String token) {
@@ -82,12 +99,18 @@ public class JwtUtil {
 
     public boolean validateToken(String token) {
         try {
+            log.debug("Validating token: {}...", token.substring(0, Math.min(30, token.length())));
+
             Jwts.parserBuilder()
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token);
+
             log.debug("Token validation successful");
             return true;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT token expired: {}", e.getMessage());
+            return false;
         } catch (JwtException | IllegalArgumentException e) {
             log.warn("Invalid JWT token: {}", e.getMessage());
             return false;

@@ -96,6 +96,9 @@ public class AuthenticationService {
             throw new AuthException("Refresh token отсутствует");
         }
 
+        // ОЧИСТКА ТОКЕНА ОТ КАВЫЧЕК (как в фильтре)
+        refreshToken = cleanToken(refreshToken);
+
         if (!jwtUtil.validateToken(refreshToken)) {
             log.warn("Refresh token validation failed");
             throw new AuthException("Недействительный refresh token");
@@ -115,6 +118,7 @@ public class AuthenticationService {
                     return new UserNotFoundException("Пользователь не найден");
                 });
 
+        // ТОЧНО ТАК ЖЕ КАК ПРИ ЛОГИНЕ!
         String newAccessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
         String newRefreshToken = jwtUtil.generateRefreshToken(user.getId());
 
@@ -173,6 +177,9 @@ public class AuthenticationService {
                     return new UserNotFoundException("Пользователь не найден");
                 });
 
+        // Сохраняем старый email для логирования
+        String oldEmail = user.getEmail();
+
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
                 throw new AuthException("Пользователь с таким email уже существует");
@@ -187,7 +194,7 @@ public class AuthenticationService {
             user.setPhone(request.getPhone());
         }
 
-
+        // ОБНОВЛЯЕМ ПАРОЛЬ ТОЛЬКО ЕСЛИ ПЕРЕДАН И НЕ ПУСТОЙ
         if (request.getPassword() != null && !request.getPassword().trim().isEmpty()) {
             log.debug("Updating password for user: {}", email);
             user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -195,17 +202,26 @@ public class AuthenticationService {
             log.debug("Password not provided, keeping existing one for user: {}", email);
         }
 
+        // Обновление имени
         if (request.getFirstName() != null) {
             user.setFirstName(request.getFirstName());
         }
 
+        // Обновление фамилии
         if (request.getLastName() != null) {
             user.setLastName(request.getLastName());
         }
 
         User updatedUser = userRepository.save(user);
+
+        // Логируем изменения
+        if (!oldEmail.equals(updatedUser.getEmail())) {
+            log.info("User email changed: {} -> {}", oldEmail, updatedUser.getEmail());
+        }
+
         log.info("User updated successfully: {}", updatedUser.getEmail());
 
+        // ВОЗВРАЩАЕМ ОБНОВЛЕННОГО ПОЛЬЗОВАТЕЛЯ
         return updatedUser;
     }
 
@@ -220,5 +236,30 @@ public class AuthenticationService {
         response.setCreatedAt(user.getCreatedAt().toString());
         response.setUpdatedAt(user.getUpdatedAt().toString());
         return response;
+    }
+
+    /**
+     * Очищает токен от кавычек и лишних символов (такой же как в фильтре)
+     */
+    private String cleanToken(String token) {
+        if (token == null) {
+            return null;
+        }
+
+        String cleaned = token;
+
+        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
+        cleaned = cleaned.replaceAll("[\"']", "");
+
+        // 2. Убираем пробелы
+        cleaned = cleaned.trim();
+
+        // 3. Убираем слово "Bearer" если оно есть повторно
+        cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
+
+        // 4. Убираем любые не-JWT символы в начале/конце
+        cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
+
+        return cleaned;
     }
 }

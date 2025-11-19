@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import test.weewee.userservice.dto.*;
+import test.weewee.userservice.exception.AuthException;
 import test.weewee.userservice.model.User;
 import test.weewee.userservice.security.JwtUtil;
 import test.weewee.userservice.service.AuthenticationService;
@@ -37,7 +38,7 @@ public class AuthenticationController {
         } catch (Exception e) {
             log.error("Registration failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("error", e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка регистрации", "error", e.getMessage()));
         }
     }
 
@@ -48,6 +49,14 @@ public class AuthenticationController {
         try {
             AuthResponse authResponse = authenticationService.authenticate(request);
 
+            // ПРОВЕРЯЕМ ЧТО ТОКЕН КОРРЕКТНЫЙ
+            String accessToken = authResponse.getAccessToken();
+            if (!jwtUtil.validateToken(accessToken)) {
+                log.error("Generated token is invalid! Token: {}...",
+                        accessToken.substring(0, Math.min(20, accessToken.length())));
+                throw new AuthException("Ошибка генерации токена");
+            }
+
             String refreshTokenCookie = cookieService.createCookie(
                     "refreshToken",
                     authResponse.getRefreshToken(),
@@ -56,7 +65,7 @@ public class AuthenticationController {
 
             LoginResponse loginResponse = LoginResponse.builder()
                     .user(authResponse.getUser())
-                    .accessToken(authResponse.getAccessToken())
+                    .accessToken(accessToken)  // используем проверенный токен
                     .build();
 
             log.info("Login successful for: {}", request.getEmail());
@@ -66,7 +75,7 @@ public class AuthenticationController {
         } catch (Exception e) {
             log.error("Login failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("error", e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка входа", "error", e.getMessage()));
         }
     }
 
@@ -89,7 +98,7 @@ public class AuthenticationController {
         } catch (Exception e) {
             log.error("Logout failed", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("error", "Ошибка при выходе: " + e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка при выходе", "error", e.getMessage()));
         }
     }
 
@@ -133,7 +142,7 @@ public class AuthenticationController {
         } catch (Exception e) {
             log.error("Password reset failed for: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("error", e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка сброса пароля", "error", e.getMessage()));
         }
     }
 
@@ -141,11 +150,38 @@ public class AuthenticationController {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+            // ОЧИСТКА ТОКЕНА ОТ КАВЫЧЕК
+            token = cleanToken(token);
             if (jwtUtil.validateToken(token)) {
                 return jwtUtil.getEmailFromToken(token);
             }
         }
         return null;
+    }
+
+    /**
+     * Очищает токен от кавычек и лишних символов
+     */
+    private String cleanToken(String token) {
+        if (token == null) {
+            return null;
+        }
+
+        String cleaned = token;
+
+        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
+        cleaned = cleaned.replaceAll("[\"']", "");
+
+        // 2. Убираем пробелы
+        cleaned = cleaned.trim();
+
+        // 3. Убираем слово "Bearer" если оно есть повторно
+        cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
+
+        // 4. Убираем любые не-JWT символы в начале/конце
+        cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
+
+        return cleaned;
     }
 
     private String getRefreshTokenFromCookies(HttpServletRequest request) {

@@ -57,13 +57,16 @@ public class UserController {
         }
 
         try {
-            authenticationService.updateUser(userEmail, updateRequest);
-            log.info("User updated successfully: {}", userEmail);
-            return ResponseEntity.ok().build();
+            // ВОЗВРАЩАЕМ ОБНОВЛЕННОГО ПОЛЬЗОВАТЕЛЯ
+            User updatedUser = authenticationService.updateUser(userEmail, updateRequest);
+            UserResponse userResponse = mapToUserResponse(updatedUser);
+
+            log.info("User updated successfully: {}", updatedUser.getEmail());
+            return ResponseEntity.ok(userResponse); // ← ВОЗВРАЩАЕМ ОБЪЕКТ
         } catch (Exception e) {
             log.error("Update user failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("error", e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка обновления пользователя", "error", e.getMessage()));
         }
     }
 
@@ -71,11 +74,38 @@ public class UserController {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+            // ОЧИСТКА ТОКЕНА ОТ КАВЫЧЕК
+            token = cleanToken(token);
             if (jwtUtil.validateToken(token)) {
                 return jwtUtil.getEmailFromToken(token);
             }
         }
         return null;
+    }
+
+    /**
+     * Очищает токен от кавычек и лишних символов
+     */
+    private String cleanToken(String token) {
+        if (token == null) {
+            return null;
+        }
+
+        String cleaned = token;
+
+        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
+        cleaned = cleaned.replaceAll("[\"']", "");
+
+        // 2. Убираем пробелы
+        cleaned = cleaned.trim();
+
+        // 3. Убираем слово "Bearer" если оно есть повторно
+        cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
+
+        // 4. Убираем любые не-JWT символы в начале/конце
+        cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
+
+        return cleaned;
     }
 
     private UserResponse mapToUserResponse(User user) {
