@@ -15,8 +15,6 @@ import test.weewee.userservice.service.AuthenticationService;
 import test.weewee.userservice.service.CookieService;
 
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 
 @Slf4j
 @RestController
@@ -38,11 +36,8 @@ public class AuthenticationController {
             return ResponseEntity.status(HttpStatus.CREATED).build();
         } catch (Exception e) {
             log.error("Registration failed for: {}", request.getEmail(), e);
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("error", e.getMessage()));
         }
     }
 
@@ -53,14 +48,12 @@ public class AuthenticationController {
         try {
             AuthResponse authResponse = authenticationService.authenticate(request);
 
-            // Устанавливаем refreshToken в cookie
             String refreshTokenCookie = cookieService.createCookie(
                     "refreshToken",
                     authResponse.getRefreshToken(),
                     Duration.ofDays(7)
             );
 
-            // Создаем ответ без refreshToken в body (только в cookie)
             LoginResponse loginResponse = LoginResponse.builder()
                     .user(authResponse.getUser())
                     .accessToken(authResponse.getAccessToken())
@@ -72,11 +65,8 @@ public class AuthenticationController {
                     .body(loginResponse);
         } catch (Exception e) {
             log.error("Login failed for: {}", request.getEmail(), e);
-
-            Map<String, String> errors = new HashMap<>();
-            errors.put("error", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("error", e.getMessage()));
         }
     }
 
@@ -90,7 +80,6 @@ public class AuthenticationController {
                 authenticationService.logout(userEmail);
             }
 
-            // Удаляем refreshToken из cookie
             String logoutCookie = cookieService.deleteCookie("refreshToken");
 
             log.info("Logout successful for: {}", userEmail);
@@ -99,7 +88,8 @@ public class AuthenticationController {
                     .build();
         } catch (Exception e) {
             log.error("Logout failed", e);
-            return ResponseEntity.badRequest().body("Ошибка при выходе: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("error", "Ошибка при выходе: " + e.getMessage()));
         }
     }
 
@@ -108,7 +98,6 @@ public class AuthenticationController {
         log.info("POST /auth/refresh - refresh token attempt");
 
         try {
-            // Получаем refreshToken из cookies
             String refreshToken = getRefreshTokenFromCookies(request);
             if (refreshToken == null) {
                 log.warn("No refresh token in cookies");
@@ -119,7 +108,6 @@ public class AuthenticationController {
 
             AuthResponse authResponse = authenticationService.refreshToken(refreshToken);
 
-            // Создаем ответ только с accessToken и user
             RefreshResponse refreshResponse = RefreshResponse.builder()
                     .accessToken(authResponse.getAccessToken())
                     .user(authResponse.getUser())
@@ -144,11 +132,8 @@ public class AuthenticationController {
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("Password reset failed for: {}", request.getEmail(), e);
-
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("error", e.getMessage()));
         }
     }
 

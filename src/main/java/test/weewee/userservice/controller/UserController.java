@@ -4,8 +4,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import test.weewee.userservice.dto.ErrorResponse;
 import test.weewee.userservice.dto.UpdateUserRequest;
 import test.weewee.userservice.dto.UserResponse;
 import test.weewee.userservice.model.User;
@@ -28,7 +30,7 @@ public class UserController {
         String userEmail = extractUserEmailFromRequest(request);
         if (userEmail == null) {
             log.warn("Unauthorized access to /users/me");
-            return ResponseEntity.status(401).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         try {
@@ -38,7 +40,7 @@ public class UserController {
             return ResponseEntity.ok(userResponse);
         } catch (Exception e) {
             log.warn("User not found: {}", userEmail);
-            return ResponseEntity.status(401).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
     }
 
@@ -51,7 +53,7 @@ public class UserController {
         String userEmail = extractUserEmailFromRequest(request);
         if (userEmail == null) {
             log.warn("Unauthorized attempt to update user");
-            return ResponseEntity.status(401).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         try {
@@ -60,7 +62,8 @@ public class UserController {
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("Update user failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("error", e.getMessage()));
         }
     }
 

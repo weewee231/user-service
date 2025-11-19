@@ -9,7 +9,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(columnNames = "email"),
+        @UniqueConstraint(columnNames = "phone")  // ДОБАВЛЕНО: уникальность телефона
+})
 @Data
 public class User {
     @Id
@@ -28,6 +31,7 @@ public class User {
     @Column(name = "last_name", nullable = false)
     private String lastName;
 
+    @Column(unique = true)  // ДОБАВЛЕНО: unique constraint
     private String phone;
 
     @Enumerated(EnumType.STRING)

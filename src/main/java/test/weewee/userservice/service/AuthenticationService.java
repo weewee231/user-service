@@ -29,11 +29,17 @@ public class AuthenticationService {
 
     @Transactional
     public User signup(RegisterRequest request) {
-        log.info("Attempting to sign up user with email: {}", request.getEmail());
+        log.info("Attempting to sign up user with email: {} and phone: {}", request.getEmail(), request.getPhone());
 
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            log.warn("Signup failed - user already exists with email: {}", request.getEmail());
+        // Проверяем email
+        if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("Signup failed - email already exists: {}", request.getEmail());
             throw new AuthException("Пользователь с таким email уже существует");
+        }
+
+        if (userRepository.existsByPhone(request.getPhone())) {
+            log.warn("Signup failed - phone already exists: {}", request.getPhone());
+            throw new AuthException("Пользователь с таким телефоном уже существует");
         }
 
         User user = new User();
@@ -52,7 +58,6 @@ public class AuthenticationService {
     public AuthResponse authenticate(LoginRequest request) {
         log.info("Authentication attempt for user: {}", request.getEmail());
 
-        // Проверяем существование пользователя
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
                     log.warn("Authentication failed - user not found: {}", request.getEmail());
@@ -96,7 +101,6 @@ public class AuthenticationService {
             throw new AuthException("Недействительный refresh token");
         }
 
-        // Используем ID пользователя из refresh token
         UUID userId = jwtUtil.getUserIdFromToken(refreshToken);
         if (userId == null) {
             log.warn("Failed to extract user ID from refresh token");
@@ -170,23 +174,33 @@ public class AuthenticationService {
                 });
 
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            if (userRepository.existsByEmail(request.getEmail())) {
                 throw new AuthException("Пользователь с таким email уже существует");
             }
             user.setEmail(request.getEmail());
         }
 
-        if (request.getPassword() != null) {
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())) {
+            if (userRepository.existsByPhone(request.getPhone())) {
+                throw new AuthException("Пользователь с таким телефоном уже существует");
+            }
+            user.setPhone(request.getPhone());
         }
+
+
+        if (request.getPassword() != null && !request.getPassword().trim().isEmpty()) {
+            log.debug("Updating password for user: {}", email);
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        } else {
+            log.debug("Password not provided, keeping existing one for user: {}", email);
+        }
+
         if (request.getFirstName() != null) {
             user.setFirstName(request.getFirstName());
         }
+
         if (request.getLastName() != null) {
             user.setLastName(request.getLastName());
-        }
-        if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
         }
 
         User updatedUser = userRepository.save(user);
