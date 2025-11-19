@@ -10,13 +10,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import test.weewee.userservice.dto.*;
 import test.weewee.userservice.exception.AuthException;
-import test.weewee.userservice.exception.UserNotFoundException;
 import test.weewee.userservice.model.User;
 import test.weewee.userservice.security.JwtUtil;
 import test.weewee.userservice.service.AuthenticationService;
 import test.weewee.userservice.service.CookieService;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -37,23 +37,30 @@ public class AuthenticationController {
             User registeredUser = authenticationService.signup(request);
             log.info("Registration successful for: {}", request.getEmail());
             return ResponseEntity.status(HttpStatus.CREATED).build();
-        } catch (AuthException e) {
-            log.error("Registration failed - auth error: {}", request.getEmail(), e);
-            // ДЛЯ ОШИБОК РЕГИСТРАЦИИ (дубликаты email/phone)
-            if (e.getMessage().contains("email")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ErrorResponse.of("Ошибка регистрации", Map.of("email", e.getMessage())));
-            } else if (e.getMessage().contains("телефон")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ErrorResponse.of("Ошибка регистрации", Map.of("phone", e.getMessage())));
-            } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ErrorResponse.of("Ошибка регистрации", "error", e.getMessage()));
-            }
         } catch (Exception e) {
             log.error("Registration failed for: {}", request.getEmail(), e);
+
+            // АНАЛИЗИРУЕМ ТИП ОШИБКИ ДЛЯ ПРАВИЛЬНОГО ПОЛЯ
+            String errorMessage = e.getMessage();
+            String message = "Ошибка регистрации";
+            Map<String, String> errors = new HashMap<>();
+
+            if (errorMessage.contains("email") || errorMessage.contains("Email") || errorMessage.contains("Пользователь с таким email")) {
+                errors.put("email", errorMessage);
+            } else if (errorMessage.contains("телефон") || errorMessage.contains("phone") || errorMessage.contains("телефоном")) {
+                errors.put("phone", errorMessage);
+            } else if (errorMessage.contains("парол") || errorMessage.contains("password")) {
+                errors.put("password", errorMessage);
+            } else if (errorMessage.contains("имя") || errorMessage.contains("firstName")) {
+                errors.put("firstName", errorMessage);
+            } else if (errorMessage.contains("фамилия") || errorMessage.contains("lastName")) {
+                errors.put("lastName", errorMessage);
+            } else {
+                errors.put("error", errorMessage);
+            }
+
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка регистрации", "error", e.getMessage()));
+                    .body(ErrorResponse.of(message, errors));
         }
     }
 
@@ -87,25 +94,28 @@ public class AuthenticationController {
             return ResponseEntity.ok()
                     .header(HttpHeaders.SET_COOKIE, refreshTokenCookie)
                     .body(loginResponse);
-        } catch (UserNotFoundException e) {
-            log.error("Login failed - user not found: {}", request.getEmail());
-            // ДЛЯ "ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН" - ПОЛЕ email
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка входа", Map.of("email", e.getMessage())));
-        } catch (AuthException e) {
-            log.error("Login failed - auth error: {}", request.getEmail(), e);
-            // ДЛЯ "НЕВЕРНЫЙ ПАРОЛЬ" - ПОЛЕ password
-            if (e.getMessage().contains("парол")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ErrorResponse.of("Ошибка входа", Map.of("password", e.getMessage())));
-            } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ErrorResponse.of("Ошибка входа", "error", e.getMessage()));
-            }
         } catch (Exception e) {
             log.error("Login failed for: {}", request.getEmail(), e);
+
+            // АНАЛИЗИРУЕМ ТИП ОШИБКИ ДЛЯ ПРАВИЛЬНОГО ПОЛЯ
+            String errorMessage = e.getMessage();
+            String message = "Ошибка входа";
+            Map<String, String> errors = new HashMap<>();
+
+            if (errorMessage.contains("Пользователь с таким email не найден")) {
+                errors.put("email", "Пользователь с таким email не найден");
+            } else if (errorMessage.contains("Неверный пароль")) {
+                errors.put("password", "Неверный пароль");
+            } else if (errorMessage.contains("email") || errorMessage.contains("Email")) {
+                errors.put("email", errorMessage);
+            } else if (errorMessage.contains("парол") || errorMessage.contains("password")) {
+                errors.put("password", errorMessage);
+            } else {
+                errors.put("error", errorMessage);
+            }
+
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка входа", "error", e.getMessage()));
+                    .body(ErrorResponse.of(message, errors));
         }
     }
 
@@ -127,8 +137,10 @@ public class AuthenticationController {
                     .build();
         } catch (Exception e) {
             log.error("Logout failed", e);
+            Map<String, String> errors = new HashMap<>();
+            errors.put("error", "Ошибка при выходе: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка при выходе", "error", e.getMessage()));
+                    .body(ErrorResponse.of("Ошибка выхода", errors));
         }
     }
 
@@ -169,15 +181,24 @@ public class AuthenticationController {
             authenticationService.updatePassword(request);
             log.info("Password reset successful for: {}", request.getEmail());
             return ResponseEntity.ok().build();
-        } catch (UserNotFoundException e) {
-            log.error("Password reset failed - user not found: {}", request.getEmail());
-            // ДЛЯ "ПОЛЬЗОВАТЕЛЬ НЕ НАЙДЕН" - ПОЛЕ email
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка сброса пароля", Map.of("email", e.getMessage())));
         } catch (Exception e) {
             log.error("Password reset failed for: {}", request.getEmail(), e);
+
+            // АНАЛИЗИРУЕМ ТИП ОШИБКИ ДЛЯ ПРАВИЛЬНОГО ПОЛЯ
+            String errorMessage = e.getMessage();
+            String message = "Ошибка сброса пароля";
+            Map<String, String> errors = new HashMap<>();
+
+            if (errorMessage.contains("Пользователь не найден") || errorMessage.contains("email") || errorMessage.contains("Email")) {
+                errors.put("email", "Пользователь с таким email не найден");
+            } else if (errorMessage.contains("парол") || errorMessage.contains("password")) {
+                errors.put("password", errorMessage);
+            } else {
+                errors.put("error", errorMessage);
+            }
+
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ErrorResponse.of("Ошибка сброса пароля", "error", e.getMessage()));
+                    .body(ErrorResponse.of(message, errors));
         }
     }
 
