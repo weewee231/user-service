@@ -71,7 +71,6 @@ public class AuthenticationController {
         try {
             AuthResponse authResponse = authenticationService.authenticate(request);
 
-            // ПРОВЕРЯЕМ ЧТО ТОКЕН КОРРЕКТНЫЙ
             String accessToken = authResponse.getAccessToken();
             if (!jwtUtil.validateToken(accessToken)) {
                 log.error("Generated token is invalid! Token: {}...",
@@ -206,7 +205,6 @@ public class AuthenticationController {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            // ОЧИСТКА ТОКЕНА ОТ КАВЫЧЕК
             token = cleanToken(token);
             if (jwtUtil.validateToken(token)) {
                 return jwtUtil.getEmailFromToken(token);
@@ -215,9 +213,6 @@ public class AuthenticationController {
         return null;
     }
 
-    /**
-     * Очищает токен от кавычек и лишних символов
-     */
     private String cleanToken(String token) {
         if (token == null) {
             return null;
@@ -225,16 +220,12 @@ public class AuthenticationController {
 
         String cleaned = token;
 
-        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
         cleaned = cleaned.replaceAll("[\"']", "");
 
-        // 2. Убираем пробелы
         cleaned = cleaned.trim();
 
-        // 3. Убираем слово "Bearer" если оно есть повторно
         cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
 
-        // 4. Убираем любые не-JWT символы в начале/конце
         cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
 
         return cleaned;

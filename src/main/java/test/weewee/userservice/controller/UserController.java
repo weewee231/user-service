@@ -68,7 +68,6 @@ public class UserController {
             return ResponseEntity.ok(userResponse);
         } catch (AuthException e) {
             log.error("Update user failed - auth error: {}", userEmail, e);
-            // ДЛЯ ОШИБОК ОБНОВЛЕНИЯ (дубликаты email/phone)
             if (e.getMessage().contains("email")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ErrorResponse.of("Ошибка обновления пользователя", Map.of("email", e.getMessage())));
@@ -90,7 +89,6 @@ public class UserController {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            // ОЧИСТКА ТОКЕНА ОТ КАВЫЧЕК
             token = cleanToken(token);
             if (jwtUtil.validateToken(token)) {
                 return jwtUtil.getEmailFromToken(token);
@@ -99,26 +97,15 @@ public class UserController {
         return null;
     }
 
-    /**
-     * Очищает токен от кавычек и лишних символов
-     */
     private String cleanToken(String token) {
         if (token == null) {
             return null;
         }
 
         String cleaned = token;
-
-        // 1. Убираем ВСЕ кавычки (двойные и одинарные)
         cleaned = cleaned.replaceAll("[\"']", "");
-
-        // 2. Убираем пробелы
         cleaned = cleaned.trim();
-
-        // 3. Убираем слово "Bearer" если оно есть повторно
         cleaned = cleaned.replaceAll("(?i)bearer", "").trim();
-
-        // 4. Убираем любые не-JWT символы в начале/конце
         cleaned = cleaned.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
 
         return cleaned;
